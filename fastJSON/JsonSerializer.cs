@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿﻿﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 #if !SILVERLIGHT
@@ -22,6 +22,18 @@ namespace fastJSON
         private JSONParameters _params;
         private bool _useEscapedUnicode = false;
         //private bool _circular = false;
+
+        private class SimpleBinder : System.Dynamic.GetMemberBinder
+        {
+            public SimpleBinder(string name) : base(name, true)
+            {
+            }
+
+            public override System.Dynamic.DynamicMetaObject FallbackGetMember(System.Dynamic.DynamicMetaObject target, System.Dynamic.DynamicMetaObject errorSuggestion)
+            {
+                throw new NotImplementedException();
+            }
+        }
 
         internal JSONSerializer(JSONParameters param)
         {
@@ -94,7 +106,11 @@ namespace fastJSON
 #if net4
             else if (_params.KVStyleStringDictionary == false && obj is System.Dynamic.ExpandoObject)
 
-            WriteStringDictionary((IDictionary<string, object>)obj);
+                WriteStringDictionary((IDictionary<string, object>)obj);
+
+            else if (obj is System.Dynamic.DynamicObject)
+
+                WriteDynamicObject((System.Dynamic.DynamicObject)obj);
 #endif
             else if (obj is IDictionary)
                 WriteDictionary((IDictionary)obj);
@@ -492,6 +508,30 @@ namespace fastJSON
 
                 pendingSeparator = true;
             }
+            _output.Append('}');
+        }
+
+        private void WriteDynamicObject(System.Dynamic.DynamicObject dynObj)
+        {
+            _output.Append('{');
+
+            var names = dynObj.GetDynamicMemberNames();
+
+            bool pendingSeparator = false;
+
+            foreach (var name in names)
+            {
+                if (pendingSeparator) _output.Append(',');
+
+                object value;
+                if (dynObj.TryGetMember(new SimpleBinder(name), out value))
+                {
+                    WritePair(name, value);
+
+                    pendingSeparator = true;
+                }
+            }
+
             _output.Append('}');
         }
 
